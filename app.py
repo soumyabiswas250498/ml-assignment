@@ -3,8 +3,8 @@ import streamlit as st
 import pandas as pd
 import pickle
 import os
-import seaborn as sns  # [ADDED] For Confusion Matrix
-import matplotlib.pyplot as plt  # [ADDED] For Plotting
+import seaborn as sns
+import matplotlib.pyplot as plt
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -12,7 +12,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
-)  # [ADDED] Metrics
+)
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Telco Churn Prediction", layout="wide")
@@ -20,7 +20,7 @@ st.title("📞 Telco Customer Churn Prediction")
 st.markdown("**BITS Pilani - Assignment 2** | Model: SMOTE Enhanced")
 
 # --- 1. LOAD ARTIFACTS ---
-# Keeping your exact path
+
 MODEL_PATH = "model/outputModel"
 
 if not os.path.exists(MODEL_PATH):
@@ -51,7 +51,7 @@ st.sidebar.header("Customer Profile")
 
 
 def user_input_features():
-    # Helper function to match your training columns
+    # Helper function to match training columns
     tenure = st.sidebar.slider("Tenure (Months)", 0, 72, 12)
     monthly_charges = st.sidebar.number_input("Monthly Charges ($)", 18.0, 120.0, 70.0)
     total_charges = st.sidebar.number_input(

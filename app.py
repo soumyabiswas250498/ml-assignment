@@ -18,7 +18,7 @@ st.set_page_config(page_title="Telco Churn Prediction", layout="wide")
 
 # --- CONFIGURATION ---
 # Ensure this matches your folder name
-MODEL_FOLDER = "outputModel"
+MODEL_FOLDER = "model/outputModels"
 
 st.title("📞 Telco Customer Churn Prediction")
 st.markdown(

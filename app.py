@@ -14,12 +14,12 @@ from sklearn.metrics import (
     f1_score,
 )
 
-# --- PAGE CONFIG ---
+# Let's set up the page configuration first
 st.set_page_config(page_title="Telco Churn Prediction", layout="wide")
 st.title("📞 Telco Customer Churn Prediction")
 st.markdown("**BITS Pilani - Assignment 2** | Model: SMOTE Enhanced")
 
-# --- 1. LOAD ARTIFACTS ---
+# --- Loading the necessary files ---
 
 MODEL_PATH = "model/outputModel"
 
@@ -30,12 +30,29 @@ if not os.path.exists(MODEL_PATH):
 
 @st.cache_resource
 def load_resources():
+    # Try to load the pickled files. If they aren't there, we'll handle it gracefully.
     try:
         scaler = pickle.load(open(f"{MODEL_PATH}/scaler.pkl", "rb"))
         feature_names = pickle.load(open(f"{MODEL_PATH}/features.pkl", "rb"))
         return scaler, feature_names
     except FileNotFoundError:
         return None, None
+
+
+def preprocess_data(df, scaler, feature_names):
+    # This function ensures the input data looks exactly like what the model expects.
+    # It handles one-hot encoding and scaling.
+    df_encoded = pd.get_dummies(df)
+    # Reindex ensures we have all the columns the model was trained on, in the right order.
+    # Missing columns are filled with 0.
+    df_encoded = df_encoded.reindex(columns=feature_names, fill_value=0)
+    return scaler.transform(df_encoded)
+
+
+@st.cache_resource
+def load_model(path):
+    # We cache the model so we don't have to reload it from disk every time the user interacts with the app.
+    return pickle.load(open(path, "rb"))
 
 
 scaler, feature_names = load_resources()
@@ -46,19 +63,21 @@ if not scaler:
     )
     st.stop()
 
-# --- 2. SIDEBAR INPUTS ---
+# --- User Input Section ---
 st.sidebar.header("Customer Profile")
 
 
 def user_input_features():
-    # Helper function to match training columns
+    # We'll use a helper function to gather all the inputs from the sidebar
+    # and pack them into a DataFrame.
     tenure = st.sidebar.slider("Tenure (Months)", 0, 72, 12)
     monthly_charges = st.sidebar.number_input("Monthly Charges ($)", 18.0, 120.0, 70.0)
+    # We'll estimate total charges based on tenure and monthly charges for simplicity
     total_charges = st.sidebar.number_input(
         "Total Charges ($)", 0.0, 10000.0, tenure * monthly_charges
     )
 
-    # Categorical Selections
+    # Dropdowns for categorical features
     contract = st.sidebar.selectbox(
         "Contract", ["Month-to-month", "One year", "Two year"]
     )
@@ -75,7 +94,7 @@ def user_input_features():
         ],
     )
 
-    # Create DataFrame
+    # Construct the DataFrame
     data = {
         "tenure": tenure,
         "MonthlyCharges": monthly_charges,
@@ -83,7 +102,8 @@ def user_input_features():
         "Contract": contract,
         "InternetService": internet_service,
         "PaymentMethod": payment_method,
-        # Default values (Hidden)
+        # These features are hidden from the UI and set to default values
+        # to simplify the interface for this demo.
         "gender": "Male",
         "Partner": "No",
         "Dependents": "No",
@@ -102,8 +122,9 @@ def user_input_features():
 
 input_df = user_input_features()
 
-# --- 3. PREDICTION ---
+# --- Prediction Logic ---
 st.subheader("Prediction Interface")
+# List all available models in the directory
 model_list = [
     f
     for f in os.listdir(MODEL_PATH)
@@ -112,15 +133,13 @@ model_list = [
 selected_model = st.selectbox("Select Model", model_list)
 
 if st.button("Predict Churn"):
-    # Preprocess
-    input_encoded = pd.get_dummies(input_df)
-    input_encoded = input_encoded.reindex(columns=feature_names, fill_value=0)
-    input_scaled = scaler.transform(input_encoded)
+    # First, get the data ready for the model
+    input_scaled = preprocess_data(input_df, scaler, feature_names)
 
-    # Load Model
-    model = pickle.load(open(f"{MODEL_PATH}/{selected_model}", "rb"))
+    # Load the chosen model
+    model = load_model(f"{MODEL_PATH}/{selected_model}")
 
-    # Predict
+    # Make the prediction
     pred = model.predict(input_scaled)[0]
     prob = (
         model.predict_proba(input_scaled)[0][1]
@@ -128,13 +147,13 @@ if st.button("Predict Churn"):
         else 0
     )
 
-    # Display
+    # Show the result to the user
     if pred == 1:
         st.error(f"⚠️ High Churn Risk (Probability: {prob:.2%})")
     else:
         st.success(f"✅ Safe Customer (Probability: {prob:.2%})")
 
-# --- 4. BATCH UPLOAD (With Requirements C & D) ---
+# --- Batch Prediction Section ---
 st.divider()
 st.subheader("Batch Prediction (Upload CSV)")
 uploaded_file = st.file_uploader("Upload Test CSV", type=["csv"])
@@ -144,51 +163,50 @@ if uploaded_file:
     st.write("Uploaded Data Preview:", test_data.head(3))
 
     if st.button("Run Batch Prediction"):
-        # Basic Cleaning
+        # Do some basic cleanup on the uploaded data
         if "customerID" in test_data.columns:
             test_data = test_data.drop("customerID", axis=1)
 
-        # Handle TotalCharges if present
+        # Make sure TotalCharges is numeric
         if "TotalCharges" in test_data.columns:
             test_data["TotalCharges"] = pd.to_numeric(
                 test_data["TotalCharges"], errors="coerce"
             ).fillna(0)
 
-        # Prepare X and y
+        # Separate features and target if 'Churn' exists
         if "Churn" in test_data.columns:
-            # Map Yes/No to 1/0
+            # Convert Yes/No to binary 1/0
             y_true = test_data["Churn"].map({"Yes": 1, "No": 0, 1: 1, 0: 0})
             X_test = test_data.drop("Churn", axis=1)
         else:
             y_true = None
             X_test = test_data
 
-        # Transform
-        X_test_encoded = pd.get_dummies(X_test)
-        X_test_encoded = X_test_encoded.reindex(columns=feature_names, fill_value=0)
-        X_test_scaled = scaler.transform(X_test_encoded)
+        # Preprocess the batch data
+        X_test_scaled = preprocess_data(X_test, scaler, feature_names)
 
-        # Predict
-        model = pickle.load(open(f"{MODEL_PATH}/{selected_model}", "rb"))
+        # Run predictions
+        model = load_model(f"{MODEL_PATH}/{selected_model}")
         y_pred = model.predict(X_test_scaled)
 
         st.success("Predictions generated!")
         test_data["Prediction"] = y_pred
         st.dataframe(test_data[["Prediction"]].head())
 
-        # --- [ADDED] EVALUATION METRICS (Requirements C & D) ---
+        # --- Evaluation Metrics ---
+        # If we have the actual labels, we can show how well the model performed.
         if y_true is not None:
             st.divider()
             st.subheader("📊 Model Performance Report")
 
-            # 1. Metrics [Req C]
+            # Display key metrics
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Accuracy", f"{accuracy_score(y_true, y_pred):.2%}")
             m2.metric("Precision", f"{precision_score(y_true, y_pred):.2%}")
             m3.metric("Recall", f"{recall_score(y_true, y_pred):.2%}")
             m4.metric("F1 Score", f"{f1_score(y_true, y_pred):.2%}")
 
-            # 2. Confusion Matrix & Classification Report [Req D]
+            # Show detailed reports
             col_left, col_right = st.columns(2)
 
             with col_left:

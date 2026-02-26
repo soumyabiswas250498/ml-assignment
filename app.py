@@ -142,6 +142,18 @@ if st.button("Predict Churn"):
 # Batch prediction
 st.divider()
 st.subheader("Batch Prediction (Upload CSV)")
+sample_test_path = "model/data/processed/test.csv"
+if os.path.exists(sample_test_path):
+    with open(sample_test_path, "rb") as f:
+        st.download_button(
+            label="Download Test CSV",
+            data=f.read(),
+            file_name="test.csv",
+            mime="text/csv",
+        )
+else:
+    st.warning(f"Sample file not found at '{sample_test_path}'")
+
 uploaded_file = st.file_uploader("Upload Test CSV", type=["csv"])
 
 if uploaded_file:
